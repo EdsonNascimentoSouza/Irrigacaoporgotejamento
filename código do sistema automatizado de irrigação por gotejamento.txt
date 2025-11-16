@@ -1,0 +1,80 @@
+#include "DHT.h"
+
+// === CONFIGURAÇÕES DOS PINOS ===
+#define DHTPIN 2              // Pino do DHT11
+#define DHTTYPE DHT11
+#define SOLO_PIN A0           // Sensor capacitivo de umidade do solo
+#define NIVEL_PIN 4           // Sensor de nível d'água (flutuador)
+#define RELE_BOMBA 7          // Relé que aciona a minibomba de água
+
+// === OBJETO DHT ===
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() 
+{
+  Serial.begin(9600);
+  dht.begin();
+
+  pinMode(SOLO_PIN, INPUT);
+  pinMode(NIVEL_PIN, INPUT_PULLUP); // usa resistor interno de pull-up
+  pinMode(RELE_BOMBA, OUTPUT);
+
+  digitalWrite(RELE_BOMBA, LOW); // relé desligado inicialmente (ativo em LOW)
+
+  Serial.println("=== Sistema de Irrigação Automática Iniciado ===");
+  Serial.println("Sensores: DHT11, Umidade do Solo, Nível d'Água, Relé da Bomba");
+}
+
+void loop() {
+  // === LEITURA DOS SENSORES ===
+  float umidadeAr = dht.readHumidity();
+  float temperatura = dht.readTemperature();
+  int leituraSolo = analogRead(SOLO_PIN);
+  bool nivelAgua = digitalRead(NIVEL_PIN);  // Leitura do sensor de nível
+
+  // Converte a leitura do solo para porcentagem (0–100%)
+  int umidadeSolo = map(leituraSolo, 1023, 0, 0, 100);
+  umidadeSolo = constrain(umidadeSolo, 0, 100);
+
+  // === EXIBE VALORES NO MONITOR SERIAL ===
+  Serial.println("------------------------------------------------");
+  Serial.print("Temperatura: ");
+  Serial.print(temperatura);
+  Serial.println(" °C");
+
+  Serial.print("Umidade do Ar: ");
+  Serial.print(umidadeAr);
+  Serial.println("%");
+
+  Serial.print("Umidade do Solo: ");
+  Serial.print(umidadeSolo);
+  Serial.println("%");
+
+  // === EXIBE ESTADO DO NÍVEL DE ÁGUA ===
+  if (nivelAgua == HIGH) {
+    Serial.println("Water Level: LOW");
+  } else {
+    Serial.println("Water Level: HIGH");
+  }
+
+  // === LÓGICA DE CONTROLE DA BOMBA ===
+  // A bomba liga apenas se:
+  // - o solo estiver seco (> 80%)
+  // - o nível da água estiver baixo (LOW)
+  // Caso contrário, ela permanece desligada.
+  if (nivelAgua == HIGH) {
+    // Nível alto → desliga a bomba
+    digitalWrite(RELE_BOMBA, HIGH);
+    Serial.println("Bomba DESLIGADA (Tanque cheio)");
+  } 
+  else if (umidadeSolo > 80 && nivelAgua == HIGH) {
+  digitalWrite(RELE_BOMBA, LOW);
+  Serial.println("Bomba LIGADA (Solo seco e nível normal)");
+  } 
+  else {
+    digitalWrite(RELE_BOMBA, HIGH);
+    Serial.println("Bomba DESLIGADA (Solo úmido ou sem água)");
+  }
+
+  delay(2000);  // Aguarda 2 segundos antes da próxima leitura
+}
